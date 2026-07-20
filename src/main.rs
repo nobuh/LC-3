@@ -42,13 +42,16 @@ impl CPU {
         let opcode = instruction & OPCODE_MASK;
         match opcode {
             OP_ADD => { // ADD
-                if (instruction & IMMEDIATE) > 0 { // add immediate signed 5 bit
+                if (instruction & IMMEDIATE) > 0 { // add SR1 + immediate signed 5 bit to DR
                     let imm5 = instruction & IMM5;
                     let sr1 = (instruction >> 6) & REG3;
                     let dr = (instruction >> 9) & REG3;
                     self.r[dr as usize] = self.r[sr1 as usize] + sext(imm5, 5);
-                } else { // add SR1 + SR2 to DR
-                    println!("Not Yet");
+                } else {                            // add SR1 + SR2 to DR
+                    let sr2 = instruction & IMM5;
+                    let sr1 = (instruction >> 6) & REG3;
+                    let dr = (instruction >> 9) & REG3;
+                    self.r[dr as usize] = self.r[sr1 as usize] + self.r[sr2 as usize];
                 }
                 true
             }
@@ -97,10 +100,12 @@ fn main() {
 
     // テストプログラムのロード
     cpu.pc = 0x3000;
-    cpu.r[0] = 0x0041;          // 'A'
-    cpu.m[0x3000] = 0xF021;     // TRAP x21 (OUT)
-    cpu.m[0x3001] = 0b0001_001_000_1_00101; // ADD R1,R0 + 5
-    cpu.m[0x3002] = 0xF025;     // TRAP x25 (HALT)
+    cpu.m[0x3000] = 0b0001_000_000_1_01111; // ADD R0,R0 + 15
+    cpu.m[0x3001] = 0b0001_000_000_000_000; // ADD R0,R0 + R0
+    cpu.m[0x3002] = 0b0001_000_000_000_000; // ADD R0,R0 + R0
+    cpu.m[0x3003] = 0b0001_000_000_1_00101; // ADD R0,R0 + 5
+    cpu.m[0x3004] = 0xF021;     // TRAP x21 (OUT)
+    cpu.m[0x3005] = 0xF025;     // TRAP x25 (HALT)
 
     // クロックループ
     while cpu.step() {}
