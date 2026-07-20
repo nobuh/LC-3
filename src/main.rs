@@ -5,8 +5,12 @@ const MEMORY_SIZE: usize = 0x10000;
 
 // instruction mask
 const OPCODE_MASK: u16 = 0xF000;
+const IMMEDIATE: u16 = 0b0000_000_000_1_00000;
+const IMM5: u16 = 0b0000_000_000_0_11111;
+const REG3: u16 = 0b0000_0000_0000_0111;
 
 // Opcodes
+const OP_ADD: u16  = 0x1000;
 const OP_TRAP: u16 = 0xF000;
 
 struct CPU {
@@ -37,6 +41,17 @@ impl CPU {
         // 2. Decode & Execute
         let opcode = instruction & OPCODE_MASK;
         match opcode {
+            OP_ADD => { // ADD
+                if (instruction & IMMEDIATE) > 0 { // add immediate signed 5 bit
+                    let imm5 = instruction & IMM5;
+                    let sr1 = (instruction >> 6) & REG3;
+                    let dr = (instruction >> 9) & REG3;
+                    self.r[dr as usize] = self.r[sr1 as usize] + sext(imm5, 5);
+                } else { // add SR1 + SR2 to DR
+                    println!("Not Yet");
+                }
+                true
+            }
             OP_TRAP => {
                 let trap_vector = instruction & 0x00FF; // 下位8ビットがトラップベクトル
                 self.trap(trap_vector)
@@ -67,6 +82,16 @@ impl CPU {
     }
 }
 
+fn sext(value: Word, msb_index: u32) -> Word {
+    if msb_index >= 15 {
+        return value;
+    }
+
+    let shift = 16 - 1 - msb_index;
+    let extended = ((value as i16) << shift) >> shift;
+    extended as Word
+}
+
 fn main() {
     let mut cpu = CPU::new();
 
@@ -74,7 +99,8 @@ fn main() {
     cpu.pc = 0x3000;
     cpu.r[0] = 0x0041;          // 'A'
     cpu.m[0x3000] = 0xF021;     // TRAP x21 (OUT)
-    cpu.m[0x3001] = 0xF025;     // TRAP x25 (HALT)
+    cpu.m[0x3001] = 0b0001_001_000_1_00101; // ADD R1,R0 + 5
+    cpu.m[0x3002] = 0xF025;     // TRAP x25 (HALT)
 
     // クロックループ
     while cpu.step() {}
