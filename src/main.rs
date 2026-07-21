@@ -4,18 +4,6 @@ type Word = u16;
 const NUM_REGISTER: usize = 8;
 const MEMORY_SIZE: usize = 0x10000;
 
-// instruction mask
-const OPCODE_MASK: u16 = 0xF000;
-const IMMEDIATE: u16 = 0b0000_000_000_1_00000;
-const IMM5: u16 = 0b0000_000_000_0_11111;
-const REG3: u16 = 0b0000_0000_0000_0111;
-const PCOFFSET9: u16 = 0b0000_0001_1111_1111;
-
-// Opcodes
-const OP_ADD:  u16 = 0x1000;
-const OP_LEA:  u16 = 0xE000;
-const OP_TRAP: u16 = 0xF000;
-
 struct CPU {
     r: [Word; NUM_REGISTER], 
     m: [Word; MEMORY_SIZE],  
@@ -35,52 +23,41 @@ impl CPU {
 
     // exec 1 cycle
     fn step(&mut self) -> bool {
-        // 1. Fetch
-        let instruction = self.m[self.pc as usize];
+        let inst = self.m[self.pc as usize];
         self.pc = self.pc.wrapping_add(1);
 
-        // 2. Decode & Execute
-        let opcode = instruction & OPCODE_MASK;
-        match opcode {
-            OP_ADD => {
-                if (instruction & IMMEDIATE) > 0 {
-                    let imm5 = instruction & IMM5;
-                    let sr1 = (instruction >> 6) & REG3;
-                    let dr = (instruction >> 9) & REG3;
-                    // 5 bit signed integer MSB index is 4.
-                    self.r[dr as usize] = (self.r[sr1 as usize] as i16 + sext(imm5, 4)) as Word;
-                    self.psr_cmp(self.r[dr as usize] as i16);
+        let dr = ((inst >> 9) & 0x7) as usize;
+        let sr1 = ((inst >> 6) & 0x7) as usize;
+
+        match inst >> 12 {
+            0x1 => { // ADD
+                let val2 = if (inst & 0x0020) != 0 {
+                    sext(inst & 0x001F, 5) as u16 // Immediate (imm5)
                 } else {
-                    let sr2 = instruction & REG3;
-                    let sr1 = (instruction >> 6) & REG3;
-                    let dr = (instruction >> 9) & REG3;
-                    self.r[dr as usize] = self.r[sr1 as usize] + self.r[sr2 as usize];
-                    self.psr_cmp(self.r[dr as usize] as i16);
-                }
+                    self.r[(inst & 0x7) as usize] // Register (sr2)
+                };
+                self.r[dr] = self.r[sr1].wrapping_add(val2);
+                self.update_flags(self.r[dr]); // ADD はフラグ更新する
                 true
             }
-            OP_LEA => {
-                let pcoffset9 = instruction & PCOFFSET9;
-                let dr = (instruction >> 9) & REG3;
-                let address = self.pc as i16 + sext(pcoffset9, 8);
-                self.r[dr as usize] = self.m[address as usize];
+            0xE => { // LEA
+                let offset = sext(inst & 0x01FF, 9);
+                // PC + Offset のアドレス値をそのままレジスタへ格納（メモリ参照なし・フラグ更新なし）
+                self.r[dr] = self.pc.wrapping_add(offset as u16);
                 true
             }
-            OP_TRAP => {
-                let trap_vector = instruction & 0x00FF;
-                self.trap(trap_vector)
-            }
+            0xF => self.trap(inst & 0x00FF), // TRAP
             _ => false,
         }
     }
 
-    fn psr_cmp(&mut self, result: i16) {
-        self.psr = self.psr & !REG3; // condtion code clear
-        match result.cmp(&0) {
-            Ordering::Less => self.psr = self.psr | 0b100,
-            Ordering::Equal => self.psr = self.psr | 0b010,
-            Ordering::Greater => self.psr = self.psr | 0b001,
-        }
+    fn update_flags(&mut self, val: Word) {
+        self.psr &= !0x7; // clear NZP flag 
+        self.psr |= match (val as i16).cmp(&0) {
+            Ordering::Less => 0b100,    // N
+            Ordering::Equal => 0b010,   // Z
+            Ordering::Greater => 0b001, // P
+        };
     }
 
     fn trap(&mut self, vector: Word) -> bool {
@@ -104,14 +81,10 @@ impl CPU {
     }
 }
 
-fn sext(value: Word, msb_index: u32) -> i16 {
-    if msb_index >= 15 {
-        return value as i16;
-    }
-
-    let shift = 16 - 1 - msb_index;
-    let extended = ((value as i16) << shift) >> shift;
-    extended
+// bit_count: 拡張前のビット数 (例: imm5 なら 5, pcoffset9 なら 9)
+fn sext(v: u16, bit_count: u32) -> i16 {
+    let shift = 16 - bit_count;
+    ((v as i16) << shift) >> shift
 }
 
 fn main() {
