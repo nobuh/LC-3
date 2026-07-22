@@ -37,12 +37,21 @@ impl CPU {
                     self.r[(inst & 0x7) as usize] // Register (sr2)
                 };
                 self.r[dr] = self.r[sr1].wrapping_add(val2);
-                self.update_flags(self.r[dr]); // ADD はフラグ更新する
+                self.update_flags(self.r[dr]); 
+                true
+            }
+            0x5 => { // AND
+                let val2 = if (inst & 0x0020) != 0 {
+                    sext(inst & 0x001F, 5) as u16 // Immediate (imm5)
+                } else {
+                    self.r[(inst & 0x7) as usize] // Register (sr2)
+                };
+                self.r[dr] = self.r[sr1] & val2;
+                self.update_flags(self.r[dr]); 
                 true
             }
             0xE => { // LEA
                 let offset = sext(inst & 0x01FF, 9);
-                // PC + Offset のアドレス値をそのままレジスタへ格納（メモリ参照なし・フラグ更新なし）
                 self.r[dr] = self.pc.wrapping_add(offset as u16);
                 true
             }
@@ -81,7 +90,6 @@ impl CPU {
     }
 }
 
-// bit_count: 拡張前のビット数 (例: imm5 なら 5, pcoffset9 なら 9)
 fn sext(v: u16, bit_count: u32) -> i16 {
     let shift = 16 - bit_count;
     ((v as i16) << shift) >> shift
@@ -99,7 +107,13 @@ fn main() {
     cpu.m[0x3004] = 0b0001_000_000_1_11011; // ADD R0,ZZ + -5
     cpu.m[0x3005] = 0xF021; // TRAP x21 (OUT)
     cpu.m[0x3006] = 0b1110_111_1_1111_1110; // LEA R7, -2 (0x3007 -2 = 0x3005)
-    cpu.m[0x3007] = 0xF025; // TRAP x25 (HALT)
+
+    cpu.m[0x3007] = 0b0001_001_001_1_11110; // ADD R1, R1 + 0b11110 (-2)
+    cpu.m[0x3008] = 0b0001_010_010_1_11011; // ADD R2, R2 + 0b11011 (-5)
+    cpu.m[0x3009] = 0b0101_001_001_1_11111; // AND R1, R1 & 0b11111 (-1) => 0b11110 (-2)
+    cpu.m[0x300A] = 0b0101_011_001_000_010; // AND R3, R1 & R2 => 0b11010 (-6)
+
+    cpu.m[0x300B] = 0xF025; // TRAP x25 (HALT)
 
     while cpu.step() {}
 
