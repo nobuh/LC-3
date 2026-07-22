@@ -1,4 +1,5 @@
 use std::cmp::Ordering;
+use std::io::{self, BufRead};
 
 type Word = u16;
 const NUM_REGISTER: usize = 8;
@@ -79,7 +80,7 @@ impl CPU {
             }
             0x25 => {
                 // HALT
-                println!("\n--- HALT ---");
+                println!(" HALT");
                 false
             }
             _ => {
@@ -98,26 +99,48 @@ fn sext(v: u16, bit_count: u32) -> i16 {
 fn main() {
     let mut cpu = CPU::new();
 
-    // Load Program
-    cpu.pc = 0x3000;
-    cpu.m[0x3000] = 0b0001_000_000_1_01111; // ADD R0,R0 + 15
-    cpu.m[0x3001] = 0b0001_000_000_000_000; // ADD R0,R0 + R0 
-    cpu.m[0x3002] = 0b0001_000_000_000_000; // ADD R0,R0 + R0
-    cpu.m[0x3003] = 0b0001_000_000_1_01010; // ADD R0,R0 + 10
-    cpu.m[0x3004] = 0b0001_000_000_1_11011; // ADD R0,ZZ + -5
-    cpu.m[0x3005] = 0xF021; // TRAP x21 (OUT)
-    cpu.m[0x3006] = 0b1110_111_1_1111_1110; // LEA R7, -2 (0x3007 -2 = 0x3005)
-
-    cpu.m[0x3007] = 0b0001_001_001_1_11110; // ADD R1, R1 + 0b11110 (-2)
-    cpu.m[0x3008] = 0b0001_010_010_1_11011; // ADD R2, R2 + 0b11011 (-5)
-    cpu.m[0x3009] = 0b0101_001_001_1_11111; // AND R1, R1 & 0b11111 (-1) => 0b11110 (-2)
-    cpu.m[0x300A] = 0b0101_011_001_000_010; // AND R3, R1 & R2 => 0b11010 (-6)
-
-    cpu.m[0x300B] = 0xF025; // TRAP x25 (HALT)
+    let _ = load_program(&mut cpu);
+    println!("------------------");
 
     while cpu.step() {}
 
     println!("\npc: {:#X}, r: {:#X?}, psr: {:#b}", cpu.pc, cpu.r, cpu.psr);
 }
 
+fn load_program(cpu: &mut CPU) -> io::Result<()> {
+    let mut address = 0x3000;
 
+    let stdin = io::stdin();
+    
+    for line in stdin.lock().lines() {
+        let line = line?;
+        let trimmed = line.trim();
+        
+        if trimmed.is_empty() {
+            continue;
+        }
+        
+        let Some(first) = trimmed.split_whitespace().next() else { todo!() };
+
+        let result = if first.starts_with("0x") || first.starts_with("0X") {
+            u16::from_str_radix(&first[2..], 16)
+        } else if first.starts_with("0b") || first.starts_with("0B") {
+            u16::from_str_radix(&first[2..], 2)
+        } else {
+            Ok(0u16)
+        };
+
+        match result {
+            Ok(value) => {
+                cpu.m[address] = value;
+                println!("m[0x{:04X}] = 0x{:04X}", address, value);
+                address += 1; 
+            }
+            Err(_) => {
+                eprintln!("error '{}'", first);
+            }
+        } 
+    }
+
+     Ok(())
+}
