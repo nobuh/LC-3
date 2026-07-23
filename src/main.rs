@@ -31,6 +31,14 @@ impl CPU {
         let sr1 = ((inst >> 6) & 0x7) as usize;
 
         match inst >> 12 {
+            0x0 => { // BR
+                let nzp = (self.psr & 0x7) as u16;  // select psr's nzp flag
+                if (dr as u16 & nzp) > 0 {          // BR nzp flag = dr
+                    let offset = sext(inst & 0x01FF, 9);
+                    self.pc = self.pc.wrapping_add(offset as u16);
+                }
+                true
+            }
             0x1 => { // ADD
                 let val2 = if (inst & 0x0020) != 0 {
                     sext(inst & 0x001F, 5) as u16 // Immediate (imm5)
