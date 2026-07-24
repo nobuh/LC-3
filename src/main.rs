@@ -59,6 +59,10 @@ impl CPU {
                 self.update_flags(self.r[dr]); 
                 true
             }
+            0xC => { // JMP or RET (RET = JMP R7) 
+                self.pc = self.r[sr1]; // BaseR is just same as SR1
+                true
+            }
             0xE => { // LEA
                 let offset = sext(inst & 0x01FF, 9);
                 self.r[dr] = self.pc.wrapping_add(offset as u16);
