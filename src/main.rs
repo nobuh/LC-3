@@ -49,6 +49,17 @@ impl CPU {
                 self.update_flags(self.r[dr]); 
                 true
             }
+            0x4 => { // JSR or JSRR
+                let temp = self.pc;
+                let pcoffset11 = sext(inst & 0x07FF, 11);
+                self.pc = if dr < 4 { // bit 11 is off
+                    self.r[sr1] 
+                } else { // JSR
+                    self.pc.wrapping_add(pcoffset11 as u16)
+                };
+                self.r[7] = temp;
+                true
+            }
             0x5 => { // AND
                 let val2 = if (inst & 0x0020) != 0 {
                     sext(inst & 0x001F, 5) as u16 // Immediate (imm5)
