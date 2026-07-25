@@ -81,6 +81,18 @@ impl CPU {
                 self.update_flags(self.r[dr]); 
                 true
             }
+            0x6 => { // LDR
+                let offset6 = sext(inst & 0x3F, 6); 
+                let baser = self.r[sr1];
+                let addr = baser.wrapping_add(offset6 as u16);
+                if addr < 0x3000 && (self.psr >> 15) == 1 {
+                    println!(" ACV!");
+                    return false
+                };
+                self.r[dr] = self.m[addr as usize];
+                self.update_flags(self.r[dr]);
+                true
+            }
             0xA => { // LDI
                 let pcoffset9 = sext(inst & 0x1FF, 9); 
                 let addr = self.pc.wrapping_add(pcoffset9 as u16);
