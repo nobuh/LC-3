@@ -18,7 +18,7 @@ impl CPU {
             r: [0; NUM_REGISTER],
             m: [0; MEMORY_SIZE], 
             pc: 0x3000,          
-            psr: 0x0002,         
+            psr: 0x8002,  // psr[15] = 1  user mode        
         }
     }
 
@@ -49,6 +49,17 @@ impl CPU {
                 self.update_flags(self.r[dr]); 
                 true
             }
+            0x2 => { // LD
+                let pcoffset9 = sext(inst & 0x1FF, 9); 
+                let addr = self.pc.wrapping_add(pcoffset9 as u16);
+                if addr < 0x3000 && (self.psr >> 15) == 1 {
+                    println!(" ACV!");
+                    return false
+                };
+                self.r[dr] = self.m[addr as usize];
+                self.update_flags(self.r[dr]);
+                true
+            }
             0x4 => { // JSR or JSRR
                 let temp = self.pc;
                 let pcoffset11 = sext(inst & 0x07FF, 11);
@@ -68,6 +79,18 @@ impl CPU {
                 };
                 self.r[dr] = self.r[sr1] & val2;
                 self.update_flags(self.r[dr]); 
+                true
+            }
+            0xA => { // LDI
+                let pcoffset9 = sext(inst & 0x1FF, 9); 
+                let addr = self.pc.wrapping_add(pcoffset9 as u16);
+                let addr = self.m[addr as usize];
+                if addr < 0x3000 && (self.psr >> 15) == 1 {
+                    println!(" ACV!");
+                    return false
+                };
+                self.r[dr] = self.m[addr as usize];
+                self.update_flags(self.r[dr]);
                 true
             }
             0xC => { // JMP or RET (RET = JMP R7) 
