@@ -93,6 +93,11 @@ impl CPU {
                 self.update_flags(self.r[dr]);
                 true
             }
+            0x9 => { // NOT
+                self.r[dr] = !self.r[sr1];
+                self.update_flags(self.r[dr]);
+                true
+            }
             0xA => { // LDI
                 let pcoffset9 = sext(inst & 0x1FF, 9); 
                 let addr = self.pc.wrapping_add(pcoffset9 as u16);
