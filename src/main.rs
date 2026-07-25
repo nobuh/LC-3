@@ -60,6 +60,16 @@ impl CPU {
                 self.update_flags(self.r[dr]);
                 true
             }
+            0x3 => { // ST
+                let pcoffset9 = sext(inst & 0x1FF, 9); 
+                let addr = self.pc.wrapping_add(pcoffset9 as u16);
+                if addr < 0x3000 && (self.psr >> 15) == 1 {
+                    println!(" ACV!");
+                    return false
+                };
+                self.m[addr as usize] = self.r[dr];
+                true
+            }
             0x4 => { // JSR or JSRR
                 let temp = self.pc;
                 let pcoffset11 = sext(inst & 0x07FF, 11);
@@ -92,6 +102,10 @@ impl CPU {
                 self.r[dr] = self.m[addr as usize];
                 self.update_flags(self.r[dr]);
                 true
+            }
+            0x8 => { // RTI
+                println!(" RTI not yet");
+                false
             }
             0x9 => { // NOT
                 self.r[dr] = !self.r[sr1];
