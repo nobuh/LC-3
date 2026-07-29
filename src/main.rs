@@ -1,5 +1,7 @@
 use std::cmp::Ordering;
-use std::io::{self, BufRead};
+use std::env;
+use std::fs::File;
+use std::io::{self, BufRead, Read};
 
 type Word = u16;
 const NUM_REGISTER: usize = 8;
@@ -16,7 +18,7 @@ impl CPU {
     fn new() -> Self {
         Self {
             r: [0; NUM_REGISTER],
-            m: [0; MEMORY_SIZE], 
+            m: [0xFFFF; MEMORY_SIZE], 
             pc: 0x3000,          
             psr: 0x8002,  // psr[15] = 1  user mode        
         }
@@ -198,12 +200,55 @@ fn sext(v: u16, bit_count: u32) -> i16 {
 fn main() {
     let mut cpu = CPU::new();
 
-    let _ = load_program(&mut cpu);
+    let args: Vec<String> = env::args().collect();
+   
+    if args.len() <= 1 {
+        let _ = load_program(&mut cpu);
+    } else {
+        let _ = load_bin(&mut cpu, args);
+    };
     println!("------------------");
 
     while cpu.step() {}
 
     println!("\npc: {:#X}, r: {:#X?}, psr: {:#b}", cpu.pc, cpu.r, cpu.psr);
+}
+
+fn load_bin(cpu: &mut CPU, args: Vec<String>) -> io::Result<()> {
+    let filename = match args.get(1) {
+        Some(name) => name,
+        None => {
+            return Ok(());
+        }
+    };
+
+    let mut file = File::open(filename)?;
+    let mut buffer = Vec::new();
+    file.read_to_end(&mut buffer)?;
+
+    if buffer.len() < 2 {
+        eprintln!("the obj file has not its start address.");
+        return Ok(());
+    }
+
+    let start_address = u16::from_be_bytes([buffer[0], buffer[1]]) as usize;
+
+    let data = &buffer[2..];
+    for (i, chunk) in data.chunks_exact(2).enumerate() {
+        let address = start_address + i;
+        if address >= cpu.m.len() {
+            eprintln!("obj file is too large");
+            break;
+        }
+
+        let bytes: [u8; 2] = chunk.try_into().unwrap();
+        cpu.m[address] = u16::from_be_bytes(bytes);
+    }
+
+    println!("start address : {:#06X}", start_address);
+    println!("start value : {:#06X}", cpu.m[start_address]);
+
+    Ok(())
 }
 
 fn load_program(cpu: &mut CPU) -> io::Result<()> {
