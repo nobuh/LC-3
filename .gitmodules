@@ -1,0 +1,3 @@
+[submodule "davedennis/LC3-Assembler"]
+	path = davedennis/LC3-Assembler
+	url = https://github.com/davedennis/LC3-Assembler
